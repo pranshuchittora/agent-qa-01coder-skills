@@ -1,148 +1,72 @@
 ---
 name: fpl-copilot
-version: 1.2.0
-description: "Fantasy Premier League copilot: syncs live FPL data, analyzes players/teams/fixtures, manages your fantasy squad, and generates self-contained HTML reports for squads, fixtures, transfers, captain picks, and gameweek strategy. Use when the user asks about FPL, player stats, transfer advice, captain picks, fixture difficulty, gameweek strategy, or squad management."
-metadata:
-  requires:
-    bins: ["curl", "jq", "sqlite3"]
+version: 1.3.0
+description: "Use when the user asks about Fantasy Premier League player stats, transfer advice, captain picks, fixture difficulty, gameweek strategy, or saved squad management."
 ---
 
 # FPL Copilot
 
-Fantasy Premier League data sync, analysis, and squad management.
+Analyze current FPL data, maintain saved squads, and produce self-contained reports. This skill specifies operations and completion criteria; choose suitable tools or commands from the actual environment.
 
-- **FPL data**: SQLite database at `~/.fplcopilot/fplcopilot.db`
-- **User squads**: Markdown files in `~/.fplcopilot/squads/`
+## Workflow
 
-## When to Use
+### 1. Establish capabilities and storage
 
-Activate this skill when the user mentions:
-- FPL, Fantasy Premier League, fantasy football (UK context)
-- Player stats, form, price, points, xG, xA, ICT, ownership
-- Transfer advice, who to buy/sell, budget options
-- Captain pick, vice-captain, chip timing
-- Fixture difficulty, FDR, schedule, easy/hard fixtures
-- Gameweek deadline, scores, standings, averages
-- Squad management, team composition, formation
-- Team analysis: momentum, xG differential, leaky defences, hot attacks
-- Rotation pairs, differential picks, value picks
+Inspect the available tools and locate this skill’s resources relative to its installed location. Identify capabilities for HTTP requests, JSON processing, structured-data queries and writes, document persistence, and report delivery. On a shell-equipped host, infer suitable installed commands or scripting libraries; on other hosts, use exposed native tools. Tool names and executables are implementation choices.
 
-## Quick Start
+Use an existing FPL data store when present. On desktop, the default persistent root is `~/.fplcopilot/`, containing `fplcopilot.db`, `squads/`, and `reports/`. On other hosts, resolve equivalent durable locations or resource handles. Reuse that mapping throughout the task and state whether saved squads are available across conversations. Keep FPL data separate from the agent application's internal storage.
 
-### 1. Check Data Freshness
+Use `references/schema.sql` as the data contract for a new store. SQL examples in the references describe queries, not a required command-line interface. A non-SQL store must preserve the same fields, keys, types, and calculation semantics. If a required capability is missing, identify the blocked operation and complete only the supported parts; distinguish unsaved output and unavailable live data explicitly.
 
-```bash
-sqlite3 ~/.fplcopilot/fplcopilot.db "SELECT * FROM sync_metadata;"
-```
+**Complete when:** the agent has identified working operations and persistent locations for the requested task, or reported a specific missing capability.
 
-If the database doesn't exist or data is stale, sync first.
+### 2. Establish data freshness
 
-### 2. Sync Data
+Before data analysis, read `references/sync.md` and the relevant mappings in `references/api.md`. Inspect successful-refresh metadata and refresh missing or stale datasets according to that contract. Fetch only the player histories required for the requested calculation; a full-player batch requires an explicit user request.
 
-```bash
-SYNC="${CLAUDE_PLUGIN_ROOT}/skills/fpl-copilot/references/sync.sh"
+**Complete when:** required datasets have successful refresh timestamps and verified persisted records, or the answer can identify the age and limitations of a usable cached snapshot. An unsuccessful refresh is not evidence of fresh data.
 
-# First time or daily refresh
-$SYNC bootstrap              # Teams, gameweeks, ~600 players (~5s)
-$SYNC fixtures               # All 380 fixtures (~2s)
+### 3. Load squads and analyze
 
-# On demand — single player's match history
-$SYNC player 328             # e.g., Salah's detailed GW-by-GW stats
+For “my squad/team,” check saved squads before asking the user to share again. Read `references/squad.md` for selection, persistence, and validation. Read `references/analysis.md` for metrics and decision frameworks; use the documented formulas with the available query/calculation capabilities. Resolve player IDs by stored names, checking ambiguity before selecting a player.
 
-# Batch — all players' histories (slow, ~60s, rate-limited)
-$SYNC player-stats
+Save newly shared squads and confirmed changes using the squad reference. Keep hypothetical transfers in draft plans; recording a change locally does not submit it to the user's FPL account. After squad analysis, persist key takeaways in Notes.
 
-# Everything at once
-$SYNC all
+**Complete when:** recommendations are backed by retrieved data and documented calculations, and every required squad write is verified or explicitly reported as unsaved.
 
-# Bypass freshness checks
-$SYNC bootstrap --force
-```
+### 4. Deliver the result
 
-### 3. Query and Analyze
+Use Markdown for quick lookups, short reasoning, deadlines, and small results. For the spatial or comparative outputs below, read `references/html-output.md` and adapt the matching template with actual data.
 
-```bash
-# All queries go through sqlite3
-sqlite3 ~/.fplcopilot/fplcopilot.db "SELECT web_name, position, form, total_points, now_cost FROM players ORDER BY form DESC LIMIT 10;"
-```
+| Output | Template |
+|--------|----------|
+| Squad formation, bench, totals | `templates/squad-view.html` |
+| Fixture difficulty matrix | `templates/fixture-matrix.html` |
+| Transfer comparison | `templates/transfer-comparison.html` |
+| Captain ranking with reasoning | `templates/captain-ranking.html` |
+| Gameweek strategy | `templates/gameweek-report.html` |
 
-Read `references/analysis.md` for formulas and example SQL queries.
-Read `references/squad.md` for squad management, persistence format, and multi-squad support.
+Create one self-contained HTML report with inline CSS, JavaScript, and SVG; use vanilla HTML/CSS/JS and responsive layouts. Store it under the resolved `reports/` location as `{YYYY-MM-DD}-{slug}.html`. Provide the supported preview, attachment, share link, or accessible file path. Infer an appropriate viewing operation when available. When report creation or delivery is unavailable, provide the substantive result in chat and identify the missing report capability.
 
-## Output Format: HTML vs Markdown
+**Complete when:** the user has a substantive answer and an accessible report reference where supported, with data freshness and any limitations stated.
 
-Many FPL outputs are inherently spatial or color-coded — formation, FDR matrix, transfer comparison. For those, generate a self-contained **HTML report** instead of a markdown table. For quick lookups and one-shot answers, stay in markdown.
+## Reference routing
 
-### When to output HTML
+Read each resource before performing its operation:
 
-| Output type | Format | Template |
-|---|---|---|
-| Squad view (formation, bench, totals) | HTML | `templates/squad-view.html` |
-| Fixture difficulty matrix (teams × next N GWs) | HTML | `templates/fixture-matrix.html` |
-| Transfer comparison (out → in, deltas) | HTML | `templates/transfer-comparison.html` |
-| Captain ranking with reasoning | HTML | `templates/captain-ranking.html` |
-| Gameweek strategy report (squad + fixtures + recs) | HTML | `templates/gameweek-report.html` |
-| Single-stat lookup ("Salah's form?") | markdown | — |
-| Short reasoning ("Bench Haaland this week?") | markdown | — |
-| Deadline, price changes, one-line answers | markdown | — |
-| 3-row SQL result | markdown | — |
+| Resource | Operation |
+|----------|-----------|
+| `references/sync.md` | Refresh, normalize, persist, and verify FPL datasets |
+| `references/api.md` | Resolve endpoints and API-to-storage field mappings |
+| `references/schema.sql` | Initialize storage or resolve tables, types, and keys |
+| `references/analysis.md` | Compute metrics and recommendations |
+| `references/squad.md` | Load, validate, create, or update squads |
+| `references/html-output.md` | Generate and deliver reports |
 
-Heuristic: if the user will *refer back to it, share it, or scan it visually* → HTML. If they glance and move on → markdown.
+## Data conventions
 
-### Universal rules for HTML output
-
-1. **Single self-contained `.html` file.** No build step. CSS in `<style>`, JS in `<script>`, SVG inlined.
-2. **Vanilla HTML/CSS/JS only.** No Tailwind, no shadcn, no external CDN, no web fonts.
-3. **Mobile responsive.** Include `<meta name="viewport" content="width=device-width, initial-scale=1">`. Layout survives a phone viewport.
-4. **Save to** `~/.fplcopilot/reports/{YYYY-MM-DD}-{slug}.html`. Create the directory with `mkdir -p` if missing.
-5. **Tell the user the path** after saving. On macOS, offer `open <path>` to view in their default browser.
-6. **Adapt the template, don't write from scratch.** Read the matching file in `templates/`, replace the placeholder data with real values from SQL, save the result.
-
-**Before generating any HTML report, read `references/html-output.md`** for color tokens, typography, the team-color table, the sortable-table snippet, and the list of anti-patterns to avoid.
-
-## Reference Docs
-
-Read these BEFORE answering questions in their domain:
-
-| Doc | When to Read |
-|-----|-------------|
-| `references/api.md` | Understanding FPL API endpoints and data structure |
-| `references/analysis.md` | Computing metrics (VAPM, projected points, FDR, momentum, etc.) |
-| `references/squad.md` | Squad persistence, management, multi-squad, scoring rules |
-| `references/schema.sql` | Understanding database tables and columns |
-| `references/html-output.md` | Styling rules, color tokens, team colors, anti-patterns for HTML reports |
-
-## Squad Persistence
-
-Squads are stored as markdown files in `~/.fplcopilot/squads/` — one file per squad. This enables multi-squad support (user's own team, friends' teams, draft plans).
-
-**Proactive persistence rules — the agent MUST follow these:**
-
-1. **On squad identification**: When the user shares their squad (screenshot, text, or any format), immediately save it to `~/.fplcopilot/squads/`. Ask for a name if unclear.
-2. **On squad changes**: When the user makes a transfer, changes captain, uses a chip, or modifies their squad in any way, update the squad file immediately after confirming the change.
-3. **On conversation start**: If the user asks about "my squad" or "my team", check `~/.fplcopilot/squads/` for existing squad files first. List available squads if multiple exist.
-4. **On analysis**: After generating a strategy report or analysis, update the squad file's Notes section with key takeaways.
-5. **Multi-squad**: Users may discuss multiple squads (their own, friends', draft plans). Each gets its own file. The user can specify which squad by name.
-6. **File naming**: Use kebab-case slugs derived from the squad name (e.g., `my-fpl-team.md`, `daves-team.md`, `wildcard-draft.md`).
-
-Read `references/squad.md` for the full markdown format specification.
-
-## Agent Rules
-
-1. **Always check freshness** before answering data questions. If `sync_metadata` shows stale data (bootstrap > 6h, fixtures on match day > 2h), run the sync script first.
-2. **Always check for saved squads** when the user asks about "my squad/team". Read `~/.fplcopilot/squads/` before asking the user to re-share.
-3. **Never guess player IDs.** Look up by name:
-   ```sql
-   -- Try exact web_name first, then partial, then full name
-   SELECT * FROM players WHERE web_name = 'Salah' COLLATE NOCASE;
-   SELECT * FROM players WHERE web_name LIKE '%salah%' COLLATE NOCASE;
-   SELECT * FROM players WHERE (first_name || ' ' || last_name) LIKE '%salah%' COLLATE NOCASE;
-   ```
-4. **Price units**: `now_cost` is in 0.1m units. `130` = £13.0m. Always display as `£X.Xm`.
-5. **Position codes**: GKP, DEF, MID, FWD (mapped from API's 1, 2, 3, 4).
-6. **Status codes**: `a`=available, `d`=doubtful, `i`=injured, `s`=suspended, `u`=unavailable.
-7. **FDR scale**: 1 (very easy) to 5 (very hard).
-8. **Normalize by price** when comparing players: value = points / (cost in millions).
-9. **Fetch player detail on demand**: Only run `sync.sh player <id>` when the user asks about a specific player's match-by-match performance. Don't batch-fetch unless explicitly needed.
-10. **Proactively persist squads**: Always save/update squad files after any squad-related interaction. Never rely on conversation context alone.
-11. **Generate HTML for spatial outputs**: Any request that maps to a template in `templates/` — "plan gameweek" / "next gameweek team" → `gameweek-report.html`; "show/view my squad", formation, bench → `squad-view.html`; "compare transfer", out → in → `transfer-comparison.html`; "captain pick" with reasoning → `captain-ranking.html`; fixture run / FDR matrix → `fixture-matrix.html` — MUST produce the HTML file (saved to `~/.fplcopilot/reports/{YYYY-MM-DD}-{slug}.html`) and report the path with an `open <path>` hint on macOS. Markdown is only for one-line / single-stat lookups, short reasoning, deadlines, price changes, or ≤3-row SQL results.
+- Resolve names against `web_name`, then partial display names and full names; clarify ambiguous matches.
+- Prices use 0.1m units: `130` means £13.0m. Display as `£X.Xm`; normalize by cost in millions for value comparisons.
+- Positions are GKP, DEF, MID, FWD, mapped from API codes 1–4.
+- Availability codes: `a` available, `d` doubtful, `i` injured, `s` suspended, `u` unavailable.
+- FDR runs from 1 (very easy) to 5 (very hard).
