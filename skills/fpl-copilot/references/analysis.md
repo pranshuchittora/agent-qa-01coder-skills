@@ -2,7 +2,7 @@
 
 All formulas match the fpl-bot web app. Use these exact calculations for consistent analysis across all agents.
 
-Query the resolved FPL data store using available database capabilities. SQL examples target `schema.sql`; equivalent calculations must preserve their semantics.
+Query the resolved SQLite 3 database through the available CLI, library, or native tool. SQL examples target `schema.sql`; preserve their calculation semantics.
 
 ---
 

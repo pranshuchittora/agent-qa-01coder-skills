@@ -12,11 +12,11 @@ Analyze current FPL data, maintain saved squads, and produce self-contained repo
 
 ### 1. Establish capabilities and storage
 
-Inspect the available tools and locate this skill’s resources relative to its installed location. Identify capabilities for HTTP requests, JSON processing, structured-data queries and writes, document persistence, and report delivery. On a shell-equipped host, infer suitable installed commands or scripting libraries; on other hosts, use exposed native tools. Tool names and executables are implementation choices.
+Inspect the available tools and locate this skill’s resources relative to its installed location. Identify capabilities for HTTP requests, JSON processing, SQLite 3 queries and writes, document persistence, and report delivery. On a shell-equipped host, infer suitable installed commands or scripting libraries; on other hosts, use exposed native tools. Tool names and executables are implementation choices.
 
 Use an existing FPL data store when present. On desktop, the default persistent root is `~/.fplcopilot/`, containing `fplcopilot.db`, `squads/`, and `reports/`. On other hosts, resolve equivalent durable locations or resource handles. Reuse that mapping throughout the task and state whether saved squads are available across conversations. Keep FPL data separate from the agent application's internal storage.
 
-Use `references/schema.sql` as the data contract for a new store. SQL examples in the references describe queries, not a required command-line interface. A non-SQL store must preserve the same fields, keys, types, and calculation semantics. If a required capability is missing, identify the blocked operation and complete only the supported parts; distinguish unsaved output and unavailable live data explicitly.
+SQLite 3 is required for structured FPL storage; the `sqlite3` executable is one possible interface, not a dependency. Use an available SQLite interface: the CLI, a scripting-language library, or a native primitive/tool backed by SQLite (such as Expo SQLite). Discover which interface is available and use it consistently. Initialize a new database from `references/schema.sql`; execute reference SQL through the selected interface, preserving the schema and calculation semantics. If a required capability is missing, identify the blocked operation and complete only the supported parts; distinguish unsaved output and unavailable live data explicitly.
 
 **Complete when:** the agent has identified working operations and persistent locations for the requested task, or reported a specific missing capability.
 

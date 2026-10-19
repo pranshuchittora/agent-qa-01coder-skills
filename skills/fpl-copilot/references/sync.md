@@ -1,6 +1,6 @@
 # Data synchronization contract
 
-Use available HTTP, JSON processing, database, and time capabilities. Select suitable native tools, installed commands, or scripting libraries from the environment. This contract is the authoritative refresh workflow; executable helpers are optional implementations and their behavior must satisfy it.
+Use available HTTP, JSON processing, SQLite 3, and time capabilities. Select suitable native tools, installed commands, or scripting libraries from the environment. This contract is the authoritative refresh workflow; executable helpers are optional implementations and their behavior must satisfy it.
 
 ## Required datasets and freshness
 
@@ -27,7 +27,7 @@ The existing schema lacks per-player freshness fields. Persist a companion `play
 
 ## Persist and verify
 
-- Initialize an absent store from `schema.sql` using available database operations. Bind values as parameters or use equivalent structured writes.
+- Initialize an absent store from `schema.sql` using the selected SQLite interface. Bind values as parameters or use equivalent structured writes.
 - Persist each dataset atomically. Bootstrap includes teams, gameweeks, and players in one transaction; fixtures form another; each player's history forms another. Upsert by schema keys, preserving multiple fixtures in a double gameweek. Replaying the same snapshot must not duplicate records.
 - Commit successful-refresh metadata with the corresponding dataset. A failed validation or transaction leaves the prior successful snapshot and timestamp intact.
 - Write per-player receipts only after the history transaction succeeds. If interrupted before the receipt write, a repeat refresh is safe. For an explicitly requested full-player batch, record progress and mark global completion only after every requested player succeeds.
