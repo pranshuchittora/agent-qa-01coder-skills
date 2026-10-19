@@ -2,6 +2,30 @@
 
 Use available HTTP, JSON processing, SQLite 3, and time capabilities. Select suitable native tools, installed commands, or scripting libraries from the environment. This contract is the authoritative refresh workflow; executable helpers are optional implementations and their behavior must satisfy it.
 
+## Relationship to the existing helper
+
+The workflow preserves the helper's data path: initialize the schema → fetch the requested endpoint → map JSON fields → upsert keyed rows → record refresh metadata. The semantic operations correspond to its entry points:
+
+| Operation | Dataset and order |
+|-----------|-------------------|
+| Bootstrap refresh | `/bootstrap-static/`: teams, events → gameweeks, elements → players |
+| Fixture refresh | `/fixtures/` → fixtures |
+| Single-player refresh | `/element-summary/{player_id}/`: history → player_gameweek_stats |
+| All-player history refresh | Stored player IDs in ascending order; single-player operation with at least 100ms between requests |
+| Explicit full refresh | Force bootstrap, then fixtures, then all-player histories |
+
+For an explicitly requested all-player history batch, reuse a verified complete batch when `last_synced_gameweek` covers the latest finished gameweek. If no gameweek has finished, report that there is nothing to refresh. An explicit forced refresh bypasses these gates. A full refresh explicitly authorizes the all-player batch.
+
+This contract deliberately strengthens behaviors where the helper does not meet the skill's requirements:
+
+- The helper skips fixture refresh on non-match days, even for an empty fixture table. This contract fetches missing fixtures and enforces the freshness thresholds below.
+- The helper imports tables separately and updates metadata afterward. This contract commits each dataset and its success metadata atomically.
+- The helper advances global batch metadata even when some players fail. This contract advances it only after the whole requested batch succeeds.
+- The helper has no per-player freshness receipt. This contract adds one and handles player history without an `element` field using the requested ID.
+- The helper's CSV path represents nullable values as empty fields. This contract preserves SQL NULL and validates required values explicitly.
+
+The helper remains available for compatibility, but invoking it alone does not establish compliance with these stronger guarantees. Choose or adapt available operations to satisfy the contract, and verify the result.
+
 ## Required datasets and freshness
 
 Inspect the `sync_metadata` singleton and whether required tables contain a usable snapshot. Timestamps represent successful persistence, in UTC.

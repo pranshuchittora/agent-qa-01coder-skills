@@ -14,7 +14,17 @@ Analyze current FPL data, maintain saved squads, and produce self-contained repo
 
 Inspect the available tools and locate this skill’s resources relative to its installed location. Identify capabilities for HTTP requests, JSON processing, SQLite 3 queries and writes, document persistence, and report delivery. On a shell-equipped host, infer suitable installed commands or scripting libraries; on other hosts, use exposed native tools. Tool names and executables are implementation choices.
 
-Use an existing FPL data store when present. On desktop, the default persistent root is `~/.fplcopilot/`, containing `fplcopilot.db`, `squads/`, and `reports/`. On other hosts, resolve equivalent durable locations or resource handles. Reuse that mapping throughout the task and state whether saved squads are available across conversations. Keep FPL data separate from the agent application's internal storage.
+Resolve storage once using the rule below, then reuse the resulting mapping for every reference and operation. Keep FPL data separate from the agent application's internal storage.
+
+**Storage resolution (in precedence order):**
+
+1. Use an explicit user-selected FPL location or a host-provided binding for the stable namespace `fpl-copilot`. If these disagree, ask which to use before writing.
+2. Without an explicit selection or host binding, use the desktop root `~/.fplcopilot/`, expanded to an absolute path through the current user's home directory. Reuse this root even when the working directory or conversation changes.
+3. On a host without a desktop home, request persistent storage for namespace `fpl-copilot` from its storage capability. Reopen its existing binding; if the host cannot provide a stable binding, ask the user to select a durable location before creating state. Conversation-local storage must be identified as such and selected explicitly.
+
+Derive `fplcopilot.db`, `squads/`, `reports/`, and `player-history-sync.json` from that one root. If the host uses separate resource handles, persist their mapping under the same namespace through the host's storage configuration. Verify that mapping can be reopened before claiming cross-conversation persistence. Every mention of a “resolved” location in the references means this mapping, never a fresh location choice.
+
+Inspect the selected location before initializing it. When competing existing mappings are discovered, ask which is authoritative; preserve existing data until the user selects a migration. Report the chosen root or handles and persistence scope when first establishing the mapping.
 
 SQLite 3 is required for structured FPL storage; the `sqlite3` executable is one possible interface, not a dependency. Use an available SQLite interface: the CLI, a scripting-language library, or a native primitive/tool backed by SQLite (such as Expo SQLite). Discover which interface is available and use it consistently. Initialize a new database from `references/schema.sql`; execute reference SQL through the selected interface, preserving the schema and calculation semantics. If a required capability is missing, identify the blocked operation and complete only the supported parts; distinguish unsaved output and unavailable live data explicitly.
 
